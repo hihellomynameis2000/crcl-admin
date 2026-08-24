@@ -1,0 +1,125 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --admin-bg: #f4f4f2;
+  --admin-panel: #ffffff;
+  --admin-panel-soft: #f9f9f7;
+  --admin-border: #deded8;
+  --admin-ink: #191917;
+  --admin-muted: #706f68;
+  --admin-accent: #2563eb;
+}
+
+.dark {
+  --admin-bg: #0b0b0a;
+  --admin-panel: #141412;
+  --admin-panel-soft: #1c1c19;
+  --admin-border: rgba(255, 255, 255, 0.12);
+  --admin-ink: #f4f4ee;
+  --admin-muted: rgba(244, 244, 238, 0.62);
+  --admin-accent: #93c5fd;
+  color-scheme: dark;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+body {
+  background: var(--admin-bg);
+  color: var(--admin-ink);
+}
+
+::selection {
+  background: #dbeafe;
+  color: #0f172a;
+}
+
+.admin-panel {
+  border: 1px solid var(--admin-border);
+  background: var(--admin-panel);
+  box-shadow: 0 1px 0 rgba(25, 25, 23, 0.03);
+}
+
+.dark .admin-panel {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.admin-table th {
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #77766f;
+  background: #f7f7f4;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.dark .admin-table th {
+  color: rgba(244, 244, 238, 0.58);
+  background: var(--admin-panel-soft);
+}
+
+.admin-table td {
+  padding: 12px;
+  border-top: 1px solid var(--admin-border);
+  vertical-align: middle;
+}
+
+.admin-table tbody tr:hover {
+  background: #fbfbf9;
+}
+
+.dark .admin-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.dark .bg-white {
+  background-color: var(--admin-panel);
+}
+
+.dark .border-black\/10,
+.dark .border-\[\#deded8\],
+.dark .border-\[\#d7d7d1\],
+.dark .border-\[\#e7e7e1\] {
+  border-color: var(--admin-border);
+}
+
+.dark [class*="text-black/"] {
+  color: var(--admin-muted);
+}
+
+.dark .text-black,
+.dark .text-\[\#191917\],
+.dark .text-\[\#171714\],
+.dark .text-\[\#161616\],
+.dark .text-gray-900,
+.dark .text-neutral-950,
+.dark .text-slate-950 {
+  color: var(--admin-ink);
+}
+
+.dark .bg-\[\#f4f4f2\] {
+  background-color: var(--admin-bg);
+}
+
+.dark .bg-\[\#f7f7f4\] {
+  background-color: var(--admin-panel-soft);
+}
+
+.dark .text-gray-800,
+.dark .text-neutral-800,
+.dark .text-slate-800 {
+  color: rgba(244, 244, 238, 0.86);
+}
+
+.dark input,
+.dark textarea,
+.dark select {
+  color: var(--admin-ink);
+  color-scheme: dark;
+}

@@ -1,0 +1,4 @@
+# Enable SVG as React Components
+[[loaders]]
+test = "**/*.svg"
+loader = "svg"
