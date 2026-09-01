@@ -26,10 +26,10 @@ async function updateCreatorStatus(userId: string, isCreator: boolean, status: C
   const application = data.user.user_metadata?.creator_application ?? {};
   const metadata: Record<string, any> = {
     ...(data.user.user_metadata ?? {}),
-    is_creator: isCreator,
-    isCreator,
     creator_application_status: applicationStatus,
   };
+  delete metadata.is_creator;
+  delete metadata.isCreator;
 
   if (metadata.creator_application) {
     metadata.creator_application = {
@@ -39,7 +39,15 @@ async function updateCreatorStatus(userId: string, isCreator: boolean, status: C
     };
   }
 
-  const { error: authError } = await client.auth.admin.updateUserById(userId, { user_metadata: metadata });
+  const appMetadata = {
+    ...(data.user.app_metadata ?? {}),
+    is_creator: isCreator,
+    isCreator,
+  };
+  const { error: authError } = await client.auth.admin.updateUserById(userId, {
+    user_metadata: metadata,
+    app_metadata: appMetadata,
+  });
   if (authError) return authError.message;
 
   const { data: profile, error: lookupError } = await client

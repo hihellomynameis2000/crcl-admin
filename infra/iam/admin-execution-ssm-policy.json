@@ -1,0 +1,25 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadCrclAdminParameters",
+      "Effect": "Allow",
+      "Action": ["ssm:GetParameters"],
+      "Resource": [
+        "arn:aws:ssm:us-east-1:536458195769:parameter/crcl/admin/*",
+        "arn:aws:ssm:us-east-1:536458195769:parameter/crcl/runtime/*"
+      ]
+    },
+    {
+      "Sid": "DecryptCrclAdminParameters",
+      "Effect": "Allow",
+      "Action": ["kms:Decrypt"],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "kms:ViaService": "ssm.us-east-1.amazonaws.com"
+        }
+      }
+    }
+  ]
+}

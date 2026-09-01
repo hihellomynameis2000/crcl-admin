@@ -3,14 +3,14 @@ import { TOKENS_PER_DOLLAR, getTenantFeeRates, supabaseAdmin } from "./supabaseS
 import { buildrbrandApi } from "./buildrbrandApi";
 
 type AnyRow = Record<string, any>;
-type AuthUser = { id: string; email?: string | null; created_at?: string; banned_until?: string | null; user_metadata?: Record<string, any> | null };
+type AuthUser = { id: string; email?: string | null; created_at?: string; banned_until?: string | null; user_metadata?: Record<string, any> | null; app_metadata?: Record<string, any> | null };
 export type MoneyRow = { amount_cents?: number | null; amount_tokens?: number | null; price_tokens?: number | null; status?: string | null; current_period_end?: string | null };
 
 const activeStatuses = new Set(["active", "paid", "complete", "completed", "succeeded", "unlocked", "posted", "settled", "fulfilled"]);
 const badStatuses = new Set(["refunded", "refund", "canceled", "cancelled", "failed", "void", "expired"]);
 
 function isTrue(value: unknown) { return value === true || value === "true" || value === 1 || value === "1"; }
-export function isCreatorAuth(user?: AuthUser | null) { return isTrue(user?.user_metadata?.is_creator) || isTrue(user?.user_metadata?.isCreator); }
+export function isCreatorAuth(user?: AuthUser | null) { return isTrue(user?.app_metadata?.is_creator) || isTrue(user?.app_metadata?.isCreator); }
 
 export function centsFromRow(row: MoneyRow) {
   if (typeof row.amount_cents === "number") return Math.max(0, row.amount_cents);
@@ -701,6 +701,7 @@ export type ShopAdminSummary = {
   bannerUrl: string | null;
   shopDomain: string | null;
   syncEnabled: boolean;
+  featured: boolean;
   productCount: number;
   activeProductCount: number;
   archivedProductCount: number;
@@ -709,7 +710,8 @@ export type ShopAdminSummary = {
   paidOrderCount: number;
   grossTokens: number;
   grossCents: number;
-  status: "active" | "needs_products" | "disabled";
+  storeExists: boolean;
+  status: "active" | "needs_products" | "disabled" | "deleted";
   createdAt: string | null;
   updatedAt: string | null;
   products: ShopAdminProduct[];
@@ -746,6 +748,61 @@ function nullableString(value: unknown) {
   return text || null;
 }
 
+function encodedObjectKey(key: string) {
+  return key
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => {
+      try {
+        return encodeURIComponent(decodeURIComponent(segment));
+      } catch {
+        return encodeURIComponent(segment);
+      }
+    })
+    .join("/");
+}
+
+function publicMediaUrl(value: unknown) {
+  const raw = nullableString(value);
+  if (!raw) return null;
+
+  const cloudfrontUrl = (
+    process.env.NEXT_PUBLIC_CLOUDFRONT_URL ||
+    process.env.AWS_CLOUDFRONT_URL ||
+    "https://d1lxwnjnmekvtn.cloudfront.net"
+  ).replace(/\/+$/, "");
+
+  if (raw.startsWith("s3://")) {
+    const storagePath = raw.slice(5);
+    const slashIndex = storagePath.indexOf("/");
+    if (slashIndex > 0 && slashIndex < storagePath.length - 1) {
+      return `${cloudfrontUrl}/${encodedObjectKey(storagePath.slice(slashIndex + 1))}`;
+    }
+    return null;
+  }
+
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.toLowerCase();
+    const virtualHostedS3 = host.match(/^(.+)\.s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com$/);
+    if (virtualHostedS3) {
+      return `${cloudfrontUrl}/${encodedObjectKey(url.pathname)}`;
+    }
+
+    if (host === "s3.amazonaws.com" || /^s3[.-][a-z0-9-]+\.amazonaws\.com$/.test(host)) {
+      const [, ...keyParts] = url.pathname.split("/").filter(Boolean);
+      if (keyParts.length) return `${cloudfrontUrl}/${encodedObjectKey(keyParts.join("/"))}`;
+    }
+
+    return raw;
+  } catch {
+    if (raw.includes("/") && !raw.includes("://")) {
+      return `${cloudfrontUrl}/${encodedObjectKey(raw)}`;
+    }
+    return raw;
+  }
+}
+
 function normalizeSource(value: unknown) {
   const source = stringFrom(value, "native").toLowerCase();
   if (source === "shopify") return "shopify";
@@ -762,10 +819,10 @@ export function shopSourceLabel(value: string) {
 function firstImage(images: unknown) {
   if (!Array.isArray(images)) return null;
   for (const image of images) {
-    if (typeof image === "string" && image.trim()) return image.trim();
+    if (typeof image === "string" && image.trim()) return publicMediaUrl(image);
     if (image && typeof image === "object") {
       const record = image as Record<string, unknown>;
-      const url = nullableString(record.url ?? record.src ?? record.image ?? record.path);
+      const url = publicMediaUrl(record.url ?? record.src ?? record.image ?? record.path);
       if (url) return url;
     }
   }
@@ -830,7 +887,7 @@ function shopDescriptionFrom(settings: AnyRow | null, profile: AnyRow | null) {
 
 function logoFrom(settings: AnyRow | null, profile: AnyRow | null) {
   const metadata = recordFrom(settings?.metadata);
-  return (
+  return publicMediaUrl(
     nullableString(metadata.logo_url) ||
     nullableString(metadata.logoUrl) ||
     nullableString(metadata.logo) ||
@@ -842,7 +899,7 @@ function logoFrom(settings: AnyRow | null, profile: AnyRow | null) {
 
 function bannerFrom(settings: AnyRow | null) {
   const metadata = recordFrom(settings?.metadata);
-  return (
+  return publicMediaUrl(
     nullableString(metadata.banner_url) ||
     nullableString(metadata.bannerUrl) ||
     nullableString(metadata.banner) ||
@@ -862,7 +919,7 @@ export async function getShopControlCenter(search = ""): Promise<ShopAdminDashbo
   const [settingsRows, productRows, orderRows] = await Promise.all([
     rows<AnyRow>(
       "creator_store_settings",
-      "id,creator_id,shop_domain,sync_enabled,metadata,created_at,updated_at",
+      "id,creator_id,shop_domain,sync_enabled,is_featured,metadata,created_at,updated_at",
       (q) => q.order("updated_at", { ascending: false }).limit(1000)
     ),
     rows<AnyRow>(
@@ -931,6 +988,7 @@ export async function getShopControlCenter(search = ""): Promise<ShopAdminDashbo
     const sourceType = shopSourceFrom(settings, shopProducts);
     const shopName = shopNameFrom(settings, profile);
     const handle = stringFrom(profile?.username, creatorId.slice(0, 8));
+    const storeExists = Boolean(settings) || activeProducts.length > 0;
     const summary: ShopAdminSummary = {
       creatorId,
       shopName,
@@ -944,6 +1002,7 @@ export async function getShopControlCenter(search = ""): Promise<ShopAdminDashbo
       bannerUrl: bannerFrom(settings),
       shopDomain: nullableString(settings?.shop_domain),
       syncEnabled: Boolean(settings?.sync_enabled),
+      featured: settings?.is_featured === true || recordFrom(settings?.metadata).featured === true,
       productCount: shopProducts.length,
       activeProductCount: activeProducts.length,
       archivedProductCount: archivedProducts.length,
@@ -952,7 +1011,8 @@ export async function getShopControlCenter(search = ""): Promise<ShopAdminDashbo
       paidOrderCount: paidOrders.length,
       grossTokens,
       grossCents: dollarsFromTokens(grossTokens),
-      status: activeProducts.length ? "active" : shopProducts.length ? "disabled" : "needs_products",
+      storeExists,
+      status: !storeExists ? "deleted" : activeProducts.length ? "active" : shopProducts.length ? "disabled" : "needs_products",
       createdAt: settings?.created_at ?? profile?.created_at ?? shopProducts[0]?.createdAt ?? null,
       updatedAt: latestDate(
         settings?.updated_at,

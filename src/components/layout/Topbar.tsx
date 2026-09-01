@@ -22,8 +22,8 @@ export default function Topbar() {
       saved === "true" ||
       (saved === null && window.matchMedia("(prefers-color-scheme: dark)").matches);
 
-    setDarkMode(prefersDark);
     applyTheme(prefersDark);
+    const animationFrame = requestAnimationFrame(() => setDarkMode(prefersDark));
 
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = (event: MediaQueryListEvent) => {
@@ -33,13 +33,18 @@ export default function Topbar() {
       }
     };
     media.addEventListener("change", handleChange);
-    return () => media.removeEventListener("change", handleChange);
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      media.removeEventListener("change", handleChange);
+    };
   }, []);
 
-  useEffect(() => {
-    applyTheme(darkMode);
-    localStorage.setItem("darkMode", darkMode ? "true" : "false");
-  }, [darkMode]);
+  const toggleTheme = () => {
+    const next = !darkMode;
+    setDarkMode(next);
+    applyTheme(next);
+    localStorage.setItem("darkMode", next ? "true" : "false");
+  };
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -56,7 +61,7 @@ export default function Topbar() {
       <div className="ml-4 flex items-center gap-2">
         <button
           type="button"
-          onClick={() => setDarkMode((value) => !value)}
+          onClick={toggleTheme}
           className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#d7d7d1] bg-white text-black/65 transition hover:bg-[#f7f7f4] dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/10"
           title="Appearance"
           aria-label={darkMode ? "Use light mode" : "Use dark mode"}

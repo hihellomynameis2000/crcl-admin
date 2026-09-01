@@ -89,6 +89,21 @@ export async function PATCH(request: NextRequest) {
   const action = text(body.action);
   const client = supabaseAdmin();
 
+  if (action === "feature") {
+    const creatorId = text(body.creatorId ?? body.creator_id);
+    if (!creatorId) return NextResponse.json({ error: "Missing creatorId" }, { status: 400 });
+
+    const { error } = await client.rpc("set_featured_store", {
+      p_creator_id: creatorId,
+      p_featured: body.featured === true,
+    });
+    if (error) {
+      const status = error.message.toLowerCase().includes("not found") ? 404 : 500;
+      return NextResponse.json({ error: error.message }, { status });
+    }
+    return NextResponse.json({ ok: true, featured: body.featured === true });
+  }
+
   if (action === "settings") {
     const creatorId = text(body.creatorId ?? body.creator_id);
     if (!creatorId) return NextResponse.json({ error: "Missing creatorId" }, { status: 400 });
@@ -152,4 +167,31 @@ export async function PATCH(request: NextRequest) {
   }
 
   return NextResponse.json({ error: "Unknown shop action" }, { status: 400 });
+}
+
+export async function DELETE(request: NextRequest) {
+  const unauthorized = await requireAdmin(request);
+  if (unauthorized) return unauthorized;
+
+  const body = (await request.json().catch(() => ({}))) as AnyRecord;
+  const creatorId = text(body.creatorId ?? body.creator_id);
+  const confirmation = text(body.confirmation).toLowerCase();
+  if (!creatorId) return NextResponse.json({ error: "Missing creatorId" }, { status: 400 });
+  if (confirmation !== "delete") {
+    return NextResponse.json({ error: 'Type "delete" to confirm store deletion.' }, { status: 400 });
+  }
+
+  const client = supabaseAdmin();
+  const { data: archivedProductCount, error } = await client.rpc(
+    "delete_creator_store_atomic",
+    { p_creator_id: creatorId }
+  );
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    archivedProductCount: Number(archivedProductCount ?? 0),
+  });
 }

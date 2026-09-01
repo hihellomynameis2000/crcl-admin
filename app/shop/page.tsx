@@ -1,6 +1,7 @@
 import AdminButton from "../../src/components/admin/AdminButton";
 import KpiCard from "../../src/components/admin/KpiCard";
 import PageTitle from "../../src/components/admin/PageTitle";
+import ShopCardActions from "../../src/components/admin/ShopCardActions";
 import {
   ManualShopSetupForm,
   NewProductForm,
@@ -38,12 +39,16 @@ function StatusPill({ shop }: { shop: ShopAdminSummary }) {
       ? "Live shop"
       : shop.status === "needs_products"
         ? "Needs products"
+        : shop.status === "deleted"
+          ? "Deleted shop"
         : "No active products";
   const tone =
     shop.status === "active"
       ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-100"
       : shop.status === "needs_products"
         ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-400/25 dark:bg-amber-400/10 dark:text-amber-100"
+        : shop.status === "deleted"
+          ? "border-red-200 bg-red-50 text-red-700 dark:border-red-400/25 dark:bg-red-400/10 dark:text-red-200"
         : "border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-white/12 dark:bg-white/8 dark:text-white/70";
 
   return <span className={`rounded-full border px-3 py-1 text-xs font-extrabold ${tone}`}>{label}</span>;
@@ -155,6 +160,8 @@ function ProductRow({ product }: { product: ShopAdminProduct }) {
 }
 
 function ShopCard({ shop }: { shop: ShopAdminSummary }) {
+  const publicAppUrl = (process.env.NEXT_PUBLIC_CRCL_APP_URL || "https://joinmycrcl.com").replace(/\/$/, "");
+  const storeUrl = `${publicAppUrl}/shop/${encodeURIComponent(shop.creatorId)}`;
   const bannerStyle = shop.bannerUrl
     ? { backgroundImage: `linear-gradient(90deg, rgba(0,0,0,.72), rgba(0,0,0,.28)), url(${shop.bannerUrl})` }
     : { backgroundImage: "linear-gradient(135deg, #11110f 0%, #2a2a25 46%, #050505 100%)" };
@@ -177,7 +184,12 @@ function ShopCard({ shop }: { shop: ShopAdminSummary }) {
                 </div>
               </div>
             </div>
-            <StatusPill shop={shop} />
+            <div className="flex items-center gap-2">
+              <StatusPill shop={shop} />
+              {shop.storeExists ? (
+                <ShopCardActions creatorId={shop.creatorId} shopName={shop.shopName} storeUrl={storeUrl} featured={shop.featured} />
+              ) : null}
+            </div>
           </div>
           <p className="max-w-3xl text-sm font-semibold leading-6 text-white/72">{shop.description}</p>
         </div>
