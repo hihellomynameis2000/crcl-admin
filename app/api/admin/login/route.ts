@@ -4,6 +4,7 @@ import {
   ADMIN_COOKIE_NAME,
   createAdminSessionToken,
   getAdminAuthConfig,
+  isAllowedAdminOrigin,
   verifyAdminCredentials,
 } from "../../../../src/lib/adminAuth";
 import { supabaseAdmin } from "../../../../src/lib/supabaseServer";
@@ -36,14 +37,7 @@ async function consumeAttempt(key: string, limit: number) {
 export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin");
   const fetchSite = request.headers.get("sec-fetch-site");
-  try {
-    if ((origin && new URL(origin).host !== request.nextUrl.host) || fetchSite === "cross-site") {
-      return NextResponse.json(
-        { error: "Invalid request origin" },
-        { status: 403, headers: { "Cache-Control": "no-store" } }
-      );
-    }
-  } catch {
+  if (!isAllowedAdminOrigin(origin) || fetchSite === "cross-site") {
     return NextResponse.json(
       { error: "Invalid request origin" },
       { status: 403, headers: { "Cache-Control": "no-store" } }

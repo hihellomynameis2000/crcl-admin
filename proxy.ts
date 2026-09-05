@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { ADMIN_COOKIE_NAME, isValidAdminSessionToken } from "./src/lib/adminAuth";
+import { ADMIN_COOKIE_NAME, isAllowedAdminOrigin, isValidAdminSessionToken } from "./src/lib/adminAuth";
 
 const PUBLIC_PATHS = new Set(["/login", "/api/admin/login"]);
 
@@ -20,14 +20,12 @@ export async function proxy(request: NextRequest) {
   const valid = await isValidAdminSessionToken(request.cookies.get(ADMIN_COOKIE_NAME)?.value);
 
   const origin = request.headers.get("origin");
-  if (valid && origin && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
-    try {
-      if (new URL(origin).host !== request.nextUrl.host) {
-        return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
-      }
-    } catch {
-      return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
-    }
+  if (
+    valid &&
+    !["GET", "HEAD", "OPTIONS"].includes(request.method) &&
+    !isAllowedAdminOrigin(origin)
+  ) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
   if (valid && pathname === "/login") {

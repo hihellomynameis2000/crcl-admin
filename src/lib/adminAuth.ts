@@ -1,4 +1,7 @@
 export const ADMIN_COOKIE_NAME = "crcl_admin_session";
+const DEFAULT_ADMIN_ORIGIN = "https://admin.joinmycrcl.com";
+const MIN_ADMIN_PASSWORD_LENGTH = 12;
+const MIN_ADMIN_SECRET_LENGTH = 24;
 
 const SESSION_TTL_SECONDS = 60 * 60 * 8;
 
@@ -8,12 +11,27 @@ export type AdminAuthConfig = {
   secret: string;
 };
 
+export function isAllowedAdminOrigin(origin?: string | null) {
+  if (!origin) return true;
+
+  try {
+    const configuredOrigin = process.env.CRCL_ADMIN_APP_URL?.trim() || DEFAULT_ADMIN_ORIGIN;
+    return new URL(origin).origin === new URL(configuredOrigin).origin;
+  } catch {
+    return false;
+  }
+}
+
 export function getAdminAuthConfig(): AdminAuthConfig | null {
   const username = process.env.CRCL_ADMIN_USERNAME?.trim() ?? "";
   const password = process.env.CRCL_ADMIN_PASSWORD ?? "";
   const secret = process.env.CRCL_ADMIN_AUTH_SECRET ?? "";
 
-  if (!username || password.length < 16 || secret.length < 32) {
+  if (
+    !username ||
+    password.length < MIN_ADMIN_PASSWORD_LENGTH ||
+    secret.length < MIN_ADMIN_SECRET_LENGTH
+  ) {
     return null;
   }
 
@@ -104,15 +122,23 @@ export async function isValidAdminSessionToken(token?: string | null) {
   if (!payload || !signature || rest.length > 0) return false;
 
   try {
+    const payloadBytes = base64UrlToBytes(payload);
+    const signatureBytes = base64UrlToBytes(signature);
+    if (
+      bytesToBase64Url(payloadBytes) !== payload ||
+      bytesToBase64Url(signatureBytes) !== signature
+    ) {
+      return false;
+    }
     const validSignature = await crypto.subtle.verify(
       "HMAC",
       await importSigningKey(config.secret),
-      base64UrlToBytes(signature),
+      signatureBytes,
       new TextEncoder().encode(payload)
     );
     if (!validSignature) return false;
 
-    const parsed = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload))) as {
+    const parsed = JSON.parse(new TextDecoder().decode(payloadBytes)) as {
       version?: number;
       subject?: string;
       issuedAt?: number;

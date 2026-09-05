@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   createAdminSessionToken,
   getAdminAuthConfig,
+  isAllowedAdminOrigin,
   isValidAdminSessionToken,
   verifyAdminCredentials,
 } from "../../src/lib/adminAuth.ts";
@@ -12,6 +13,7 @@ const original = {
   username: process.env.CRCL_ADMIN_USERNAME,
   password: process.env.CRCL_ADMIN_PASSWORD,
   secret: process.env.CRCL_ADMIN_AUTH_SECRET,
+  origin: process.env.CRCL_ADMIN_APP_URL,
 };
 
 function restoreEnvironment() {
@@ -21,6 +23,8 @@ function restoreEnvironment() {
   else process.env.CRCL_ADMIN_PASSWORD = original.password;
   if (original.secret === undefined) delete process.env.CRCL_ADMIN_AUTH_SECRET;
   else process.env.CRCL_ADMIN_AUTH_SECRET = original.secret;
+  if (original.origin === undefined) delete process.env.CRCL_ADMIN_APP_URL;
+  else process.env.CRCL_ADMIN_APP_URL = original.origin;
 }
 
 test.afterEach(restoreEnvironment);
@@ -36,6 +40,13 @@ test("admin authentication fails closed without strong runtime secrets", async (
   process.env.CRCL_ADMIN_PASSWORD = "too-short";
   process.env.CRCL_ADMIN_AUTH_SECRET = "too-short";
   assert.equal(getAdminAuthConfig(), null);
+});
+
+test("admin authentication accepts the preserved production credential lengths", () => {
+  process.env.CRCL_ADMIN_USERNAME = "admin";
+  process.env.CRCL_ADMIN_PASSWORD = "fifteen-chars!!";
+  process.env.CRCL_ADMIN_AUTH_SECRET = "twenty-eight-char-secret-key!";
+  assert.notEqual(getAdminAuthConfig(), null);
 });
 
 test("signed admin sessions validate and reject tampering", async () => {
@@ -58,8 +69,16 @@ test("admin login rejects cross-site requests and forwarded-IP prefix spoofing",
     "utf8"
   );
   assert.match(route, /fetchSite === "cross-site"/);
-  assert.match(route, /new URL\(origin\)\.host !== request\.nextUrl\.host/);
+  assert.match(route, /isAllowedAdminOrigin\(origin\)/);
   assert.match(route, /chain\?\.at\(-1\)/);
+});
+
+test("admin origin validation uses the configured public origin behind proxies", () => {
+  process.env.CRCL_ADMIN_APP_URL = "https://admin.joinmycrcl.com";
+  assert.equal(isAllowedAdminOrigin("https://admin.joinmycrcl.com"), true);
+  assert.equal(isAllowedAdminOrigin("https://evil.example"), false);
+  assert.equal(isAllowedAdminOrigin("not-a-url"), false);
+  assert.equal(isAllowedAdminOrigin(null), true);
 });
 
 test("admin store deletion uses the same atomic database operation as creator deletion", () => {
